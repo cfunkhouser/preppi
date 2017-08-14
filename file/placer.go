@@ -18,25 +18,38 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package main
+package file
 
 import (
-	"flag"
-
-	"github.com/cfunkhouser/stickthiswherever/file"
+	"encoding/json"
+	"fmt"
+	"io/ioutil"
 )
 
-var (
-	mapFile = flag.String("config", "", "Mappings file path")
-)
+// Mapper represents a set of file mappings.
+type Mapper struct {
+	Mappings []*Mapping
+}
 
-func main() {
-	flag.Parse()
-	mapper, err := file.MapperFromConfig(*mapFile)
+// Apply the set of mappings to the filesystem
+func (m *Mapper) Apply() error {
+	for _, mapping := range m.Mappings {
+		if err := mapping.Apply(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+// MapperFromConfig loads a config JSON file, returns a Mapper
+func MapperFromConfig(config string) (*Mapper, error) {
+	data, err := ioutil.ReadFile(config)
 	if err != nil {
-		panic(err)
+		return nil, fmt.Errorf("failed reading config %q: %v", config, err)
 	}
-	if err := mapper.Apply(); err != nil {
-		panic(err)
+	p := &Mapper{Mappings: make([]*Mapping, 0)}
+	if err := json.Unmarshal(data, &p.Mappings); err != nil {
+		return nil, fmt.Errorf("failed reading config %q: %v", config, err)
 	}
+	return p, nil
 }

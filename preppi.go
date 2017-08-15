@@ -1,4 +1,4 @@
-// Copyright 2017 Google Inc.
+// Copyright (c) 2017 Christian Funkhouser <christian.funkhouser@gmail.com>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -18,38 +18,26 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package file
+package main
 
 import (
-	"encoding/json"
-	"fmt"
-	"io/ioutil"
+	"flag"
+	"log"
+
+	"github.com/cfunkhouser/preppi/file"
 )
 
-// Mapper represents a set of file mappings.
-type Mapper struct {
-	Mappings []*Mapping
-}
+var (
+	mapFile = flag.String("config", "", "Mappings file path")
+)
 
-// Apply the set of mappings to the filesystem
-func (m *Mapper) Apply() error {
-	for _, mapping := range m.Mappings {
-		if err := mapping.Apply(); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-// MapperFromConfig loads a config JSON file, returns a Mapper
-func MapperFromConfig(config string) (*Mapper, error) {
-	data, err := ioutil.ReadFile(config)
+func main() {
+	flag.Parse()
+	mapper, err := file.MapperFromConfig(*mapFile)
 	if err != nil {
-		return nil, fmt.Errorf("failed reading config %q: %v", config, err)
+		panic(err)
 	}
-	p := &Mapper{Mappings: make([]*Mapping, 0)}
-	if err := json.Unmarshal(data, &p.Mappings); err != nil {
-		return nil, fmt.Errorf("failed reading config %q: %v", config, err)
+	if err := mapper.Apply(); err != nil {
+		log.Printf("Error applying file: ")
 	}
-	return p, nil
 }

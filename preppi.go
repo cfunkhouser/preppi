@@ -24,7 +24,7 @@ import (
 	"flag"
 	"log"
 
-	"github.com/cfunkhouser/preppi/file"
+	"github.com/cfunkhouser/preppi/preppi"
 )
 
 var (
@@ -33,7 +33,7 @@ var (
 
 func main() {
 	flag.Parse()
-	mapper, err := file.MapperFromConfig(*mapFile)
+	mapper, err := preppi.MapperFromConfig(*mapFile)
 	if err != nil {
 		panic(err)
 	}

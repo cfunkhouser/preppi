@@ -1,4 +1,4 @@
-// Copyright (c) 2017 Christian Funkhouser <christian.funkhouser@gmail.com> 
+// Copyright (c) 2017 Christian Funkhouser <christian.funkhouser@gmail.com>
 //
 // Permission is hereby granted, free of charge, to any person obtaining a copy
 // of this software and associated documentation files (the "Software"), to deal
@@ -18,7 +18,7 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
-package file
+package preppi
 
 import (
 	"encoding/json"
@@ -26,10 +26,15 @@ import (
 	"io"
 	"io/ioutil"
 	"os"
+
+	"github.com/spf13/afero"
 )
 
-// ClobberFlag is the set of flags passed to FileOpen when Apply()ing a Mapping.
-const ClobberFlag = os.O_WRONLY | os.O_CREATE | os.O_TRUNC
+// clobberFlag is the set of flags passed to FileOpen when Apply()ing a Mapping.
+const clobberFlag = os.O_WRONLY | os.O_CREATE | os.O_TRUNC
+
+// fileSystem is an afero.Fs implementation. It is a var for testing.
+var fileSystem = afero.NewOsFs()
 
 // Mapping represents a file mapped from the Source to Destination. Mode, UID and GID
 // apply to the written Destination file.
@@ -46,11 +51,11 @@ type Mapping struct {
 
 // Apply the mapping, copying Source to Destination and set the Mode, UID and GID.
 func (m *Mapping) Apply() error {
-	if _, err := os.Stat(m.Source); err != nil {
+	if _, err := fileSystem.Stat(m.Source); err != nil {
 		return fmt.Errorf("couldn't stat source: %v", err)
 	}
 	// Make sure that if Destination exists, we are permitted to Clobber it.
-	if _, err := os.Stat(m.Destination); err != nil {
+	if _, err := fileSystem.Stat(m.Destination); err != nil {
 		if !os.IsNotExist(err) {
 			return fmt.Errorf("something unexpected happened stat-ing destination: %v", err)
 		}
@@ -60,13 +65,13 @@ func (m *Mapping) Apply() error {
 	}
 
 	// Open Destination first, since it's more likely to fail.
-	dst, err := os.OpenFile(m.Destination, ClobberFlag, m.Mode)
+	dst, err := fileSystem.OpenFile(m.Destination, clobberFlag, m.Mode)
 	if err != nil {
 		return fmt.Errorf("couldn't open destination the way we wanted: %v", err)
 	}
 	defer dst.Close()
 
-	src, err := os.Open(m.Source)
+	src, err := fileSystem.Open(m.Source)
 	if err != nil {
 		return fmt.Errorf("couldn't open source: %v", err)
 	}

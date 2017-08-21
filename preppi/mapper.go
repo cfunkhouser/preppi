@@ -24,7 +24,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 
 	"github.com/spf13/afero"
@@ -33,8 +32,12 @@ import (
 // clobberFlag is the set of flags passed to FileOpen when Apply()ing a Mapping.
 const clobberFlag = os.O_WRONLY | os.O_CREATE | os.O_TRUNC
 
-// fileSystem is an afero.Fs implementation. It is a var for testing.
-var fileSystem = afero.NewOsFs()
+// preppiFS is an afero.Fs. It is a var for testing.
+var preppiFS afero.Fs
+
+func init() {
+	preppiFS = afero.NewOsFs()
+}
 
 // Mapping represents a file mapped from the Source to Destination. Mode, UID and GID
 // apply to the written Destination file.
@@ -51,11 +54,11 @@ type Mapping struct {
 
 // Apply the mapping, copying Source to Destination and set the Mode, UID and GID.
 func (m *Mapping) Apply() error {
-	if _, err := fileSystem.Stat(m.Source); err != nil {
+	if _, err := preppiFS.Stat(m.Source); err != nil {
 		return fmt.Errorf("couldn't stat source: %v", err)
 	}
 	// Make sure that if Destination exists, we are permitted to Clobber it.
-	if _, err := fileSystem.Stat(m.Destination); err != nil {
+	if _, err := preppiFS.Stat(m.Destination); err != nil {
 		if !os.IsNotExist(err) {
 			return fmt.Errorf("something unexpected happened stat-ing destination: %v", err)
 		}
@@ -65,22 +68,24 @@ func (m *Mapping) Apply() error {
 	}
 
 	// Open Destination first, since it's more likely to fail.
-	dst, err := fileSystem.OpenFile(m.Destination, clobberFlag, m.Mode)
+	dst, err := preppiFS.OpenFile(m.Destination, clobberFlag, m.Mode)
 	if err != nil {
 		return fmt.Errorf("couldn't open destination the way we wanted: %v", err)
 	}
-	defer dst.Close()
 
-	src, err := fileSystem.Open(m.Source)
+	src, err := preppiFS.Open(m.Source)
 	if err != nil {
 		return fmt.Errorf("couldn't open source: %v", err)
 	}
-	defer src.Close()
 
 	if _, err := io.Copy(dst, src); err != nil {
 		return fmt.Errorf("copy failed: %v", m)
 	}
-	if err := dst.Chown(m.UID, m.GID); err != nil {
+
+	dst.Close()
+	src.Close()
+
+	if err := preppiFS.Chown(m.Destination, m.UID, m.GID); err != nil {
 		return fmt.Errorf("couldn't chown destination: %v", err)
 	}
 
@@ -92,7 +97,7 @@ type Mapper struct {
 	Mappings []*Mapping
 }
 
-// Apply the set of mappings to the filesystem
+// Apply the set of mappings to the preppiFS
 func (m *Mapper) Apply() error {
 	for _, mapping := range m.Mappings {
 		if err := mapping.Apply(); err != nil {
@@ -102,15 +107,15 @@ func (m *Mapper) Apply() error {
 	return nil
 }
 
-// MapperFromConfig loads a config JSON file, returns a Mapper
+// MapperFromConfig reads a config and returns a Mapper
 func MapperFromConfig(config string) (*Mapper, error) {
-	data, err := ioutil.ReadFile(config)
+	data, err := afero.ReadFile(preppiFS, config)
 	if err != nil {
 		return nil, fmt.Errorf("failed reading config %q: %v", config, err)
 	}
-	p := &Mapper{Mappings: make([]*Mapping, 0)}
-	if err := json.Unmarshal(data, &p.Mappings); err != nil {
+	var m []*Mapping
+	if err := json.Unmarshal(data, &m); err != nil {
 		return nil, fmt.Errorf("failed reading config %q: %v", config, err)
 	}
-	return p, nil
+	return &Mapper{Mappings: m}, nil
 }

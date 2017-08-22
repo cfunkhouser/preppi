@@ -128,7 +128,7 @@ func (m *Mapping) Apply() error {
 
 // Mapper represents a set of file mappings.
 type Mapper struct {
-	Mappings []*Mapping
+	Mappings []*Mapping `json:"map"`
 }
 
 // Apply the set of mappings to the preppiFS
@@ -147,9 +147,9 @@ func MapperFromConfig(config string) (*Mapper, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed reading config %q: %v", config, err)
 	}
-	var m []*Mapping
-	if err := json.Unmarshal(data, &m); err != nil {
+	m := &Mapper{}
+	if err := json.Unmarshal(data, m); err != nil {
 		return nil, fmt.Errorf("failed reading config %q: %v", config, err)
 	}
-	return &Mapper{Mappings: m}, nil
+	return m, nil
 }

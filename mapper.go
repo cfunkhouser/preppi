@@ -25,6 +25,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 
 	"github.com/spf13/afero"
 )
@@ -39,12 +40,14 @@ func init() {
 	preppiFS = afero.NewOsFs()
 }
 
-// Mapping represents a file mapped from the Source to Destination. Mode, UID and GID
-// apply to the written Destination file.
+// Mapping represents a file mapped from the Source to Destination. Mode, UID
+// and GID apply to the written Destination file. DirMode is applied to any
+// directories created.
 type Mapping struct {
 	Source      string      `json:"source"`
 	Destination string      `json:"destination"`
 	Mode        os.FileMode `json:"mode"`
+	DirMode     os.FileMode `json:"dirmode"`
 	UID         int         `json:"uid"`
 	GID         int         `json:"gid"`
 
@@ -52,11 +55,14 @@ type Mapping struct {
 	Clobber bool `json:"clobber,omitempty"`
 }
 
-// Apply the mapping, copying Source to Destination and set the Mode, UID and GID.
-func (m *Mapping) Apply() error {
+func (m *Mapping) sourceOK() error {
 	if _, err := preppiFS.Stat(m.Source); err != nil {
 		return fmt.Errorf("couldn't stat source: %v", err)
 	}
+	return nil
+}
+
+func (m *Mapping) destinationOK() error {
 	// Make sure that if Destination exists, we are permitted to Clobber it.
 	if _, err := preppiFS.Stat(m.Destination); err != nil {
 		if !os.IsNotExist(err) {
@@ -66,29 +72,57 @@ func (m *Mapping) Apply() error {
 	} else if !m.Clobber {
 		return fmt.Errorf("can't clobber existing destination file %q", m.Destination)
 	}
+	return nil
+}
 
+func (m *Mapping) prepareDestination() (afero.File, error) {
+	if err := preppiFS.MkdirAll(path.Dir(m.Destination), m.DirMode); err != nil {
+		return nil, err
+	}
 	// Open Destination first, since it's more likely to fail.
 	dst, err := preppiFS.OpenFile(m.Destination, clobberFlag, m.Mode)
 	if err != nil {
-		return fmt.Errorf("couldn't open destination the way we wanted: %v", err)
+		return nil, err
 	}
+	return dst, nil
+}
+
+func (m *Mapping) copyToDestination() error {
+	// Open Destination first, since it's more likely to fail.
+	dst, err := m.prepareDestination()
+	if err != nil {
+		return fmt.Errorf("couldn't prepare destination %q: %v", m.Destination, err)
+	}
+	defer dst.Close()
 
 	src, err := preppiFS.Open(m.Source)
 	if err != nil {
 		return fmt.Errorf("couldn't open source: %v", err)
 	}
+	defer src.Close()
 
 	if _, err := io.Copy(dst, src); err != nil {
 		return fmt.Errorf("copy failed: %v", m)
 	}
 
-	dst.Close()
-	src.Close()
-
 	if err := preppiFS.Chown(m.Destination, m.UID, m.GID); err != nil {
 		return fmt.Errorf("couldn't chown destination: %v", err)
 	}
 
+	return nil
+}
+
+// Apply the mapping, copying Source to Destination and set the metadata.
+func (m *Mapping) Apply() error {
+	if err := m.sourceOK(); err != nil {
+		return err
+	}
+	if err := m.destinationOK(); err != nil {
+		return err
+	}
+	if err := m.copyToDestination(); err != nil {
+		return err
+	}
 	return nil
 }
 

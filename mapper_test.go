@@ -18,88 +18,53 @@
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
 
+// Testing a real-world OS can be done like this:
+//
+//   dir, err := ioutil.TempDir("", "TestNameOrWhatever")
+//   if err != nil {
+//     t.Fatal(err)
+//   }
+//   ofs := afero.NewOsFs()
+//   preppiFS = afero.NewBasePathFs(ofs, dir)
+//   defer os.RemoveAll(dir)
+//   setUpFilesystemForTest(t, preppiFS, files)
+//   ...
+//
+// I've not added any tests like this, because a test on the actual filesystem
+// depends on system configuration, and is unlikely to work well between any two
+// arbitrary systems. We'll need to eventually establish some integration tests.
+// TODO(cfunkhouser): integration tests.
+
 package preppi
 
 import (
 	"bytes"
 	"io"
 	"os"
+	"path"
 	"testing"
 
 	"github.com/spf13/afero"
 )
 
-const testConfigFileName = "/boot/stuff/preppi.conf"
-
 type testFile struct {
 	Content []byte
 	Mode    os.FileMode
+	DirMode os.FileMode
 	UID     int
 	GID     int
 }
 
-var mapperTestCases = []*struct {
-	CaseName  string
-	Files     map[string]*testFile
-	Mapper    *Mapper
-	WantError bool
-}{
-	{
-		CaseName: "Success Casse",
-		Files: map[string]*testFile{
-			"/boot/stuff/something": &testFile{
-				[]byte("This is something"),
-				0644,
-				500,
-				500,
-			},
-			"/boot/stuff/something-else": &testFile{
-				[]byte("This is something else"),
-				0644,
-				500,
-				500,
-			},
-		},
-		Mapper: &Mapper{
-			Mappings: []*Mapping{
-				&Mapping{
-					Source:      "/boot/stuff/something",
-					Destination: "/etc/something",
-					Mode:        0640,
-					UID:         0,
-					GID:         5,
-				},
-				&Mapping{
-					Source:      "/boot/stuff/something-else",
-					Destination: "/etc/something.d/else",
-					Mode:        0640,
-					UID:         0,
-					GID:         5,
-				},
-			},
-		},
-	},
-	{
-		CaseName: "Source Doesn't Exist",
-		Files:    map[string]*testFile{},
-		Mapper: &Mapper{
-			Mappings: []*Mapping{
-				&Mapping{
-					Source:      "/boot/stuff/doesnt-exist",
-					Destination: "/etc/something",
-					Mode:        0640,
-					UID:         0,
-					GID:         5,
-				},
-			},
-		},
-		WantError: true,
-	},
-}
-
+// setUpFilesystemForTest adds files - as described by a mapping of file name to
+// testFile structs - to an afero file system. If you pass an OsFs to this
+// function, be prepared for the consequences.
 func setUpFilesystemForTest(t *testing.T, fs afero.Fs, files map[string]*testFile) {
 	for name, tf := range files {
-		f, err := fs.OpenFile(name, os.O_CREATE, tf.Mode)
+		dir := path.Dir(name)
+		if err := fs.MkdirAll(dir, tf.DirMode); err != nil {
+			t.Fatalf("Couldn't set up test directory %q: %v", dir, err)
+		}
+		f, err := fs.OpenFile(name, os.O_CREATE|os.O_WRONLY, tf.Mode)
 		if err != nil {
 			t.Fatalf("Couldn't set up test with file %q: %v", name, err)
 		}
@@ -109,32 +74,150 @@ func setUpFilesystemForTest(t *testing.T, fs afero.Fs, files map[string]*testFil
 	}
 }
 
-func TestMapper(t *testing.T) {
+func TestSourceOK(t *testing.T) {
 	origPreppiFS := preppiFS
 	defer func() { preppiFS = origPreppiFS }()
 
-	for _, tt := range mapperTestCases {
-		preppiFS = afero.NewMemMapFs()
-		setUpFilesystemForTest(t, preppiFS, tt.Files)
+	preppiFS = afero.NewMemMapFs()
 
-		err := tt.Mapper.Apply()
-		if err != nil && !tt.WantError {
-			t.Errorf("%v: wanted no error, got: %v", tt.CaseName, err)
-		} else if err == nil && tt.WantError {
-			t.Errorf("%v: wanted error, got none", tt.CaseName)
-		} else {
-			// Make sure we end up in the intended end state.
-			for _, m := range tt.Mapper.Mappings {
-				f := tt.Files[m.Source]
-				s, err := preppiFS.Stat(m.Destination)
-				if err != nil {
-					t.Errorf("%v: error stat-ing %q: %v", tt.CaseName, m.Source, err)
-					break
-				}
-				if s.Mode() != m.Mode {
-					t.Errorf("%v: wanted %v, got %v for %q", tt.CaseName, f.Mode, s.Mode(), err)
-				}
-			}
+	files := map[string]*testFile{
+		"/boot/stuff/something": &testFile{
+			[]byte("This is something"),
+			0644,
+			0755,
+			500,
+			500,
+		},
+	}
+	setUpFilesystemForTest(t, preppiFS, files)
+
+	for _, tt := range []struct {
+		name    string
+		mapping *Mapping
+		wantErr bool
+	}{
+		{
+			name:    "source ok",
+			mapping: &Mapping{"/boot/stuff/something", "/doesnt/matter", 0640, 0750, 500, 500, false},
+			wantErr: false,
+		},
+		{
+			name:    "source not ok",
+			mapping: &Mapping{"/boot/stuff/nothing", "/doesnt/matter", 0640, 0750, 500, 500, false},
+			wantErr: true,
+		},
+	} {
+		err := tt.mapping.Apply()
+		if err == nil && tt.wantErr {
+			t.Errorf("%s: wanted error, got none", tt.name)
+		} else if err != nil && !tt.wantErr {
+			t.Errorf("%s: wanted no error, got: %q", tt.name, err)
 		}
+	}
+}
+
+func TestDestinationOK(t *testing.T) {
+	origPreppiFS := preppiFS
+	defer func() { preppiFS = origPreppiFS }()
+	preppiFS = afero.NewMemMapFs()
+
+	files := map[string]*testFile{
+		"/this/exists": &testFile{
+			[]byte("This is something"),
+			0644,
+			0755,
+			500,
+			500,
+		},
+		"/boot/stuff/something": &testFile{
+			[]byte("This is something"),
+			0644,
+			0755,
+			500,
+			500,
+		},
+	}
+	setUpFilesystemForTest(t, preppiFS, files)
+
+	for _, tt := range []struct {
+		name    string
+		mapping *Mapping
+		wantErr bool
+	}{
+		{
+			name:    "destination doesn't exist",
+			mapping: &Mapping{"/boot/stuff/something", "/this/doesnt/exist", 0640, 0750, 500, 500, false},
+			wantErr: false,
+		},
+		{
+			name:    "destination exists, can't clobber",
+			mapping: &Mapping{"/boot/stuff/something", "/this/exists", 0640, 0750, 500, 500, false},
+			wantErr: true,
+		},
+		{
+			name:    "destination exists, can clobber",
+			mapping: &Mapping{"/boot/stuff/something", "/this/exists", 0640, 0750, 500, 500, true},
+			wantErr: false,
+		},
+	} {
+		err := tt.mapping.Apply()
+		if err == nil && tt.wantErr {
+			t.Errorf("%s: wanted error, got none", tt.name)
+		} else if err != nil && !tt.wantErr {
+			t.Errorf("%s: wanted no error, got: %q", tt.name, err)
+		}
+	}
+}
+
+func TestCopyToDestination(t *testing.T) {
+	origPreppiFS := preppiFS
+	defer func() { preppiFS = origPreppiFS }()
+
+	files := map[string]*testFile{
+		"/boot/stuff/something": &testFile{
+			[]byte("This is something"),
+			0644,
+			0755,
+			500,
+			500,
+		},
+	}
+
+	for _, tt := range []struct {
+		name    string
+		mapping *Mapping
+	}{
+		{
+			name:    "same permissions, same mode",
+			mapping: &Mapping{"/boot/stuff/something", "/some/place", 0644, 0755, 500, 500, false},
+		},
+		{
+			name:    "same permissions, different mode",
+			mapping: &Mapping{"/boot/stuff/something", "/some/place", 0512, 0623, 500, 500, false},
+		},
+		{
+			name:    "different permissions, same mode",
+			mapping: &Mapping{"/boot/stuff/something", "/some/place", 0644, 0755, 0, 0, false},
+		},
+		{
+			name:    "different permissions, different mode",
+			mapping: &Mapping{"/boot/stuff/something", "/some/place", 0444, 0555, 0, 0, false},
+		},
+	} {
+		// Start with a cleanly-configured FS for each case.
+		preppiFS = afero.NewMemMapFs()
+		setUpFilesystemForTest(t, preppiFS, files)
+
+		if err := tt.mapping.copyToDestination(); err != nil {
+			t.Errorf("%s: wanted no error, got: %v", tt.name, err)
+		}
+		s, err := preppiFS.Stat(tt.mapping.Destination)
+		if err != nil {
+			t.Fatalf("%s: stat failed: %v", tt.name, err)
+		}
+		if s.Mode() != tt.mapping.Mode {
+			t.Errorf("%s: wanted mode %v, got mode %v", tt.name, tt.mapping.Mode, s.Mode())
+		}
+		// TODO(cfunkhouser): Figure out how to check UID/GID here.
 	}
 }

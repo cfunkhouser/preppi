@@ -24,7 +24,7 @@ import (
 	"flag"
 	"log"
 
-	"github.com/cfunkhouser/preppi/preppi"
+	"github.com/cfunkhouser/preppi"
 )
 
 var (
@@ -38,6 +38,6 @@ func main() {
 		panic(err)
 	}
 	if err := mapper.Apply(); err != nil {
-		log.Printf("Error applying file: ")
+		log.Println(err)
 	}
 }

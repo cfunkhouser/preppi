@@ -24,20 +24,23 @@ import (
 	"flag"
 	"log"
 
-	"github.com/cfunkhouser/preppi"
+	"github.com/cfunkhouser/preppi/preppi"
 )
 
 var (
+	version = "1.0"
+	buildID = "dev"
 	mapFile = flag.String("config", "", "Mappings file path")
 )
 
 func main() {
 	flag.Parse()
+	log.Printf("preppi %v (%v) starting", version, buildID)
 	mapper, err := preppi.MapperFromConfig(*mapFile)
 	if err != nil {
-		panic(err)
+		log.Fatal(err)
 	}
 	if err := mapper.Apply(); err != nil {
-		log.Println(err)
+		log.Fatal(err)
 	}
 }

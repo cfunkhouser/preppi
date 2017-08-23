@@ -36,6 +36,9 @@ var (
 func main() {
 	flag.Parse()
 	log.Printf("preppi %v (%v) starting", version, buildID)
+	if *mapFile == "" {
+		log.Fatal("No --config specified, not sure what to do.")
+	}
 	mapper, err := preppi.MapperFromConfig(*mapFile)
 	if err != nil {
 		log.Fatal(err)

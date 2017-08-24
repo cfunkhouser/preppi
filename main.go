@@ -23,21 +23,23 @@ package main
 import (
 	"flag"
 	"log"
+	"time"
 
 	"github.com/cfunkhouser/preppi/preppi"
 )
 
 var (
-	version = "1.0"
-	buildID = "dev"
+	version = "0.1.0"
+	buildID = "dev" // Overriden at build time by build scripts.
 	mapFile = flag.String("config", "", "Mappings file path")
 )
 
 func main() {
 	flag.Parse()
-	log.Printf("preppi %v (%v) starting", version, buildID)
+	log.Printf("preppi v%v (%v) starting", version, buildID)
+	start := time.Now()
 	if *mapFile == "" {
-		log.Fatal("No --config specified, not sure what to do.")
+		log.Fatal("No --config specified, nothing to do!")
 	}
 	mapper, err := preppi.MapperFromConfig(*mapFile)
 	if err != nil {
@@ -46,4 +48,5 @@ func main() {
 	if err := mapper.Apply(); err != nil {
 		log.Fatal(err)
 	}
+	log.Printf("preppi applied %v files in %v", len(mapper.Mappings), time.Since(start))
 }

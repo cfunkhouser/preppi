@@ -22,7 +22,9 @@ package main
 
 import (
 	"flag"
+	"fmt"
 	"log"
+	"os"
 	"time"
 
 	"github.com/cfunkhouser/preppi/preppi"
@@ -31,11 +33,19 @@ import (
 var (
 	version = "0.1.0"
 	buildID = "dev" // Overriden at build time by build scripts.
+
 	mapFile = flag.String("config", "", "Mappings file path")
+	verFlag = flag.Bool("version", false, "If true, print version and exit.")
 )
 
 func main() {
 	flag.Parse()
+
+	if *verFlag {
+		fmt.Printf("preppi v%v (%v)\n", version, buildID)
+		os.Exit(0)
+	}
+
 	log.Printf("preppi v%v (%v) starting", version, buildID)
 	start := time.Now()
 	if *mapFile == "" {

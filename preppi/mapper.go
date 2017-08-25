@@ -33,11 +33,11 @@ import (
 // clobberFlag is the set of flags passed to FileOpen when Apply()ing a Mapping.
 const clobberFlag = os.O_WRONLY | os.O_CREATE | os.O_TRUNC
 
-// preppiFS is an afero.Fs. It is a var for testing.
-var preppiFS afero.Fs
+// preppiFS is a Fs. It is a var for testing.
+var preppiFS Fs
 
 func init() {
-	preppiFS = afero.NewOsFs()
+	preppiFS = NewOsFs()
 }
 
 // Mapping represents a file mapped from the Source to Destination. Mode, UID

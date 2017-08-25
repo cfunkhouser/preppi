@@ -24,8 +24,8 @@
 //   if err != nil {
 //     t.Fatal(err)
 //   }
-//   ofs := afero.NewOsFs()
-//   preppiFS = afero.NewBasePathFs(ofs, dir)
+//   ofs := NewOsFs()
+//   preppiFS = NewBasePathFs(ofs, dir)
 //   defer os.RemoveAll(dir)
 //   setUpFilesystemForTest(t, preppiFS, files)
 //   ...
@@ -43,8 +43,6 @@ import (
 	"os"
 	"path"
 	"testing"
-
-	"github.com/spf13/afero"
 )
 
 type testFile struct {
@@ -56,9 +54,9 @@ type testFile struct {
 }
 
 // setUpFilesystemForTest adds files - as described by a mapping of file name to
-// testFile structs - to an afero file system. If you pass an OsFs to this
-// function, be prepared for the consequences.
-func setUpFilesystemForTest(t *testing.T, fs afero.Fs, files map[string]*testFile) {
+// testFile structs - to a file system. If you pass an OsFs to this function, be
+// prepared for the consequences.
+func setUpFilesystemForTest(t *testing.T, fs Fs, files map[string]*testFile) {
 	for name, tf := range files {
 		dir := path.Dir(name)
 		if err := fs.MkdirAll(dir, tf.DirMode); err != nil {
@@ -78,7 +76,7 @@ func TestSourceOK(t *testing.T) {
 	origPreppiFS := preppiFS
 	defer func() { preppiFS = origPreppiFS }()
 
-	preppiFS = afero.NewMemMapFs()
+	preppiFS = NewMemMapFs()
 
 	files := map[string]*testFile{
 		"/boot/stuff/something": &testFile{
@@ -119,7 +117,7 @@ func TestSourceOK(t *testing.T) {
 func TestDestinationOK(t *testing.T) {
 	origPreppiFS := preppiFS
 	defer func() { preppiFS = origPreppiFS }()
-	preppiFS = afero.NewMemMapFs()
+	preppiFS = NewMemMapFs()
 
 	files := map[string]*testFile{
 		"/this/exists": &testFile{
@@ -205,7 +203,7 @@ func TestCopyToDestination(t *testing.T) {
 		},
 	} {
 		// Start with a cleanly-configured FS for each case.
-		preppiFS = afero.NewMemMapFs()
+		preppiFS = NewMemMapFs()
 		setUpFilesystemForTest(t, preppiFS, files)
 
 		if err := tt.mapping.copyToDestination(); err != nil {

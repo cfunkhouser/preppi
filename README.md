@@ -1,7 +1,7 @@
 # PrepPi
 
-PrepPi is a simple binary designed to run very early in the boot process of
-a Raspberry Pi (and specifically, the Raspbian OS) which copies files from one
+PrepPi is a simple binary designed to run early in the boot process of a
+Raspberry Pi (and specifically, the Raspbian OS) which copies files from one
 location to another.
 
 The intended use is to copy files from a directory under `/boot` - which in

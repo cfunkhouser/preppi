@@ -26,7 +26,7 @@ system enters multi-user mode to minimize the chances of the configs having
 already been read. This means that very-early boot configuration is still
 impossible with PrepPi.
 
-## Using Preppi
+## Using PrepPi
 
 1.  Flash an OS image with PrepPi installed to the SD card
 1.  Mount the boot volume locally

@@ -1,0 +1,13 @@
+[Unit]
+Description=preppi
+DefaultDependencies=no
+After=sysinit.target local-fs.target
+Before=base.target
+
+[Service]
+ExecStart=/usr/local/bin/preppi
+Type=oneshot
+RemainAfterExit=yes
+
+[Install]
+WantedBy=base.target

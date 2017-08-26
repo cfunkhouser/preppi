@@ -1,0 +1,9 @@
+Package: preppi
+Version: %VERSION%
+Section: admin
+Priority: optional
+Architecture: %ARCH%
+Essential: no
+Installed-Size: %SIZE%
+Maintainer: Christian Funkhouser <christian.funkhouser@gmail.com>
+Description: First boot initialization of device with user-provided configuration

@@ -1,16 +1,28 @@
-all: outdir build
+SRCROOT = /opt/gopath/src/github.com/cfunkhouser/preppi
 
-outdir:
-	mkdir -p bin
+VERSION = 0.1
+BUILDID = $(shell git describe --always --long --dirty)
 
-dockerprep:
+all: build
+
+prep:
+	mkdir -p build/out/bin
+	echo "$(VERSION)-$(BUILDID)" > build/out/VERSION
+
+docker:
 	docker build -t preppi-build build/
 
-build: outdir
-	go build -i -v -ldflags="-X main.buildID=$(shell git describe --always --long --dirty)" -o bin/preppi main.go
+build: prep
+	go build -i -v -ldflags="-X main.buildID=$(BUILDID) -X main.version=$(VERSION)" -o build/out/bin/preppi main.go
 
-linux: outdir
-	docker run -ti --rm -v $(shell pwd):/opt/gopath/src/github.com/cfunkhouser/preppi preppi-build go build -i -v -ldflags="-X main.buildID=$(shell git describe --always --long --dirty)" -o bin/preppi main.go
+linux: docker prep
+	docker run -ti --rm -v $(shell pwd):$(SRCROOT) preppi-build build-preppi.sh
+
+deb: linux
+	docker run -ti --rm -v $(shell pwd):$(SRCROOT) preppi-build build-preppi-deb.sh
 
 clean:
-	rm -rf bin
+	rm -rf build/out
+
+superclean: clean
+	docker rmi -f preppi-build

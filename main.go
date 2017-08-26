@@ -34,7 +34,7 @@ var (
 	version = "0.1.0"
 	buildID = "dev" // Overriden at build time by build scripts.
 
-	mapFile = flag.String("config", "", "Mappings file path")
+	mapFile = flag.String("config", "/boot/preppi/preppi.conf", "Mappings file path")
 	verFlag = flag.Bool("version", false, "If true, print version and exit.")
 )
 

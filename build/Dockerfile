@@ -9,24 +9,25 @@ ENV PATH "/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin:/usr/loca
 # Install dependencies for the following commands
 RUN apt-get update -q -y --fix-missing && \
     apt-get install -q -y --no-install-recommends \
-      apt-transport-https \
       build-essential \
       ca-certificates \
       curl \
-      file \
       git-core \
-      gnupg2 \
-      software-properties-common \
-      sudo \
-    && \
-    # Create an empty Go workspace at $GOPATH
-    mkdir -p "${GOPATH}/{bin,pkg,src}"
+      sudo
+
+# Make sure GOPATH exists
+RUN mkdir -p "${GOPATH}" 
 
 # Install the Go binaries under /usr/local.
-RUN /usr/bin/curl -s "${GOTARBALL}" | sudo tar -zx -C "/usr/local/"
+RUN curl -s "${GOTARBALL}" | sudo tar -zx -C "/usr/local/"
 
 # Install helpful tools for building Go code
-RUN /usr/local/go/bin/go get github.com/golang/dep/cmd/dep && \
-    /usr/local/go/bin/go get github.com/mitchellh/gox
+RUN go get github.com/golang/dep/cmd/dep
 
-CMD /bin/bash
+# Copy the build scripts, and make sure they're executable.
+ADD build-preppi.sh /usr/local/bin/build-preppi.sh
+ADD build-preppi-deb.sh /usr/local/bin/build-preppi-deb.sh
+RUN chmod +x /usr/local/bin/build-preppi.sh && \
+    chmod +x /usr/local/bin/build-preppi-deb.sh
+
+CMD bash

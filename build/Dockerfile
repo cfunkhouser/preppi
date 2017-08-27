@@ -24,10 +24,8 @@ RUN curl -s "${GOTARBALL}" | sudo tar -zx -C "/usr/local/"
 # Install helpful tools for building Go code
 RUN go get github.com/golang/dep/cmd/dep
 
-# Copy the build scripts, and make sure they're executable.
-ADD build-preppi.sh /usr/local/bin/build-preppi.sh
+# Copy the db build script, and make sure it's executable.
 ADD build-preppi-deb.sh /usr/local/bin/build-preppi-deb.sh
-RUN chmod +x /usr/local/bin/build-preppi.sh && \
-    chmod +x /usr/local/bin/build-preppi-deb.sh
+RUN chmod +x /usr/local/bin/build-preppi-deb.sh
 
 CMD bash

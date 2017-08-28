@@ -37,7 +37,13 @@ var (
 	mapFile = flag.String("config", "/boot/preppi/preppi.conf", "Mappings file path")
 	verFlag = flag.Bool("version", false, "If true, print version and exit.")
 	dryRun  = flag.Bool("dry_run", false, "If true, parses the config but changes nothing.")
+	reboot  = flag.Bool("reboot", false, "Reboot when file changes have been written")
 )
+
+func init() {
+	flag.StringVar(&preppi.RebootCommand, "reboot_command", preppi.RebootCommand,
+		"Command to run to reboot the system. No arguments may be passed.")
+}
 
 func main() {
 	flag.Parse()
@@ -62,5 +68,11 @@ func main() {
 			log.Printf("Error: %v", err)
 		}
 		log.Printf("preppi processed %v files, modified %v in %v", len(mapper.Mappings), n, time.Since(start))
+		if n > 0 && err == nil && *reboot {
+			log.Printf("Files changed, rebooting with: %q", preppi.RebootCommand)
+			if err := preppi.RebootSystem(); err != nil {
+				log.Printf("preppi tried to reboot the system but failed: %v", err)
+			}
+		}
 	}
 }

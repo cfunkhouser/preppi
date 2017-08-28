@@ -4,7 +4,7 @@ Requires=local-fs.target
 After=local-fs.target
 
 [Service]
-ExecStart=/usr/local/bin/preppi
+ExecStart=/usr/local/bin/preppi -reboot
 Type=oneshot
 RemainAfterExit=yes
 

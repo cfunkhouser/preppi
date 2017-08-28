@@ -36,6 +36,7 @@ var (
 
 	mapFile = flag.String("config", "/boot/preppi/preppi.conf", "Mappings file path")
 	verFlag = flag.Bool("version", false, "If true, print version and exit.")
+	dryRun  = flag.Bool("dry_run", false, "If true, parses the config but changes nothing.")
 )
 
 func main() {
@@ -55,8 +56,12 @@ func main() {
 	if err != nil {
 		log.Fatal(err)
 	}
-	if err := mapper.Apply(); err != nil {
-		log.Fatal(err)
+	if !*dryRun {
+		if err := mapper.Apply(); err != nil {
+			log.Fatal(err)
+		}
+		log.Printf("preppi applied %v files in %v", len(mapper.Mappings), time.Since(start))
+	} else {
+		log.Printf("preppi would have applied %v files if not for --dry_run", len(mapper.Mappings))
 	}
-	log.Printf("preppi applied %v files in %v", len(mapper.Mappings), time.Since(start))
 }

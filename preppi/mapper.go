@@ -21,9 +21,12 @@
 package preppi
 
 import (
+	"bytes"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path"
 
@@ -33,8 +36,12 @@ import (
 // clobberFlag is the set of flags passed to FileOpen when Apply()ing a Mapping.
 const clobberFlag = os.O_WRONLY | os.O_CREATE | os.O_TRUNC
 
-// preppiFS is a Fs. It is a var for testing.
-var preppiFS Fs
+var (
+	// preppiFS is a Fs. It is a var for testing.
+	preppiFS Fs
+
+	errCantClobber = errors.New("Can't clobber file")
+)
 
 func init() {
 	preppiFS = NewOsFs()
@@ -55,31 +62,48 @@ type Mapping struct {
 	Clobber bool `json:"clobber,omitempty"`
 }
 
-func (m *Mapping) sourceOK() error {
-	if _, err := preppiFS.Stat(m.Source); err != nil {
-		return fmt.Errorf("couldn't stat source: %v", err)
-	}
-	return nil
-}
-
-func (m *Mapping) destinationOK() error {
-	// Make sure that if Destination exists, we are permitted to Clobber it.
-	if _, err := preppiFS.Stat(m.Destination); err != nil {
+// destinationExists checks if the file exists. If anything unexpected happens,
+// return the error we encountered.
+func (m *Mapping) destinationExists() (bool, error) {
+	_, err := preppiFS.Stat(m.Destination)
+	if err != nil {
 		if !os.IsNotExist(err) {
-			return fmt.Errorf("something unexpected happened stat-ing destination: %v", err)
+			// There was some unexpected error stat-ing the destination
+			return false, err
 		}
-		// NotExist errors are okay; that's what we're hoping for.
-	} else if !m.Clobber {
-		return fmt.Errorf("can't clobber existing destination file %q", m.Destination)
+		return false, nil
 	}
-	return nil
+	return true, nil
 }
 
-func (m *Mapping) prepareDestination() (afero.File, error) {
+// destinationFingerprint opens the destination file for read and checksums
+// the file. If the destination doesn't exist, it is an error.
+func (m *Mapping) destinationFingerprint() ([]byte, error) {
+	dst, err := preppiFS.OpenFile(m.Destination, os.O_RDONLY, 0000)
+	if err != nil {
+		return nil, err
+	}
+	defer dst.Close()
+
+	s, err := dst.Stat()
+	if err != nil {
+		return nil, err
+	}
+
+	dstCksm, err := fingerprint(s.Mode(), dst)
+	if err != nil {
+		return nil, err
+	}
+	return dstCksm, nil
+}
+
+// prepareNewDestination opens the destination for write with the appropriate
+// mode, creating any non-extant parent directories.
+func (m *Mapping) prepareNewDestination() (afero.File, error) {
+	// Make sure all destination parent directories exist
 	if err := preppiFS.MkdirAll(path.Dir(m.Destination), m.DirMode); err != nil {
 		return nil, err
 	}
-	// Open Destination first, since it's more likely to fail.
 	dst, err := preppiFS.OpenFile(m.Destination, clobberFlag, m.Mode)
 	if err != nil {
 		return nil, err
@@ -87,40 +111,74 @@ func (m *Mapping) prepareDestination() (afero.File, error) {
 	return dst, nil
 }
 
-func (m *Mapping) copyToDestination() error {
-	// Open Destination first, since it's more likely to fail.
-	dst, err := m.prepareDestination()
+// shouldCopy determines if the source should be applied to the destination.
+func (m *Mapping) shouldCopy(srcCksm []byte) (bool, error) {
+	exists, err := m.destinationExists()
 	if err != nil {
-		return fmt.Errorf("couldn't prepare destination %q: %v", m.Destination, err)
+		return false, err
 	}
-	defer dst.Close()
+	// If the file doesn't exist, we're safe to copy.
+	if !exists {
+		return true, nil
+	}
+	// Get a fingerprint for the existing destination.
+	dstCksm, err := m.destinationFingerprint()
+	if err != nil {
+		return false, err
+	}
+	log.Printf("Destination %x", srcCksm)
+	log.Printf("     Source %x", dstCksm)
+	// If the fingerprints match, nothing to do.
+	if bytes.Compare(srcCksm, dstCksm) == 0 {
+		return false, nil
+	}
+	// If we're allowed to clobber the file, say so.
+	if m.Clobber {
+		return true, nil
+	}
+	return false, errCantClobber
+}
 
+// source opens and checksums the file. The caller is responsible for closing.
+// Return values are undefined if the returned error is not nil.
+func (m *Mapping) source() (afero.File, []byte, error) {
 	src, err := preppiFS.Open(m.Source)
 	if err != nil {
-		return fmt.Errorf("couldn't open source: %v", err)
+		return nil, nil, fmt.Errorf("couldn't open source: %v", err)
 	}
-	defer src.Close()
-
-	if _, err := io.Copy(dst, src); err != nil {
-		return fmt.Errorf("copy failed: %v", m)
+	cksm, err := fingerprint(m.Mode, src)
+	if err != nil {
+		return nil, nil, err
 	}
-
-	if err := preppiFS.Chown(m.Destination, m.UID, m.GID); err != nil {
-		return fmt.Errorf("couldn't chown destination: %v", err)
-	}
-
-	return nil
+	return src, cksm, nil
 }
 
 // Apply the mapping, copying Source to Destination and set the metadata.
 func (m *Mapping) Apply() error {
-	if err := m.sourceOK(); err != nil {
+	src, srcCksm, err := m.source()
+	if err != nil {
 		return err
 	}
-	if err := m.destinationOK(); err != nil {
+	defer src.Close()
+
+	ok, err := m.shouldCopy(srcCksm)
+	if err != nil {
 		return err
 	}
-	if err := m.copyToDestination(); err != nil {
+	if !ok {
+		log.Printf("skipping %q", m.Destination)
+		return nil
+	}
+
+	log.Printf("beginning copy %q -> %q", m.Source, m.Destination)
+	dst, err := m.prepareNewDestination()
+	if err != nil {
+		return err
+	}
+	if _, err := io.Copy(dst, src); err != nil {
+		return err
+	}
+	if err := preppiFS.Chown(m.Destination, m.UID, m.GID); err != nil {
 		return err
 	}
 	return nil

@@ -72,14 +72,13 @@ func setUpFilesystemForTest(t *testing.T, fs Fs, files map[string]*testFile) {
 	}
 }
 
-func TestSourceOK(t *testing.T) {
+func TestDestinationExists(t *testing.T) {
 	origPreppiFS := preppiFS
 	defer func() { preppiFS = origPreppiFS }()
-
 	preppiFS = NewMemMapFs()
 
 	files := map[string]*testFile{
-		"/boot/stuff/something": &testFile{
+		"/some/file": &testFile{
 			[]byte("This is something"),
 			0644,
 			0755,
@@ -92,130 +91,96 @@ func TestSourceOK(t *testing.T) {
 	for _, tt := range []struct {
 		name    string
 		mapping *Mapping
-		wantErr bool
+		want    bool
 	}{
 		{
-			name:    "source ok",
-			mapping: &Mapping{"/boot/stuff/something", "/doesnt/matter", 0640, 0750, 500, 500, false},
-			wantErr: false,
+			name:    "doesn't exist",
+			mapping: &Mapping{"/whatever", "/doesnt/exists", 0640, 0750, 500, 500, false},
 		},
 		{
-			name:    "source not ok",
-			mapping: &Mapping{"/boot/stuff/nothing", "/doesnt/matter", 0640, 0750, 500, 500, false},
-			wantErr: true,
+			name:    "exists",
+			mapping: &Mapping{"/whatever", "/some/file", 0640, 0750, 500, 500, false},
+			want:    true,
 		},
 	} {
-		err := tt.mapping.Apply()
-		if err == nil && tt.wantErr {
-			t.Errorf("%s: wanted error, got none", tt.name)
-		} else if err != nil && !tt.wantErr {
-			t.Errorf("%s: wanted no error, got: %q", tt.name, err)
-		}
-	}
-}
-
-func TestDestinationOK(t *testing.T) {
-	origPreppiFS := preppiFS
-	defer func() { preppiFS = origPreppiFS }()
-	preppiFS = NewMemMapFs()
-
-	files := map[string]*testFile{
-		"/this/exists": &testFile{
-			[]byte("This is something"),
-			0644,
-			0755,
-			500,
-			500,
-		},
-		"/boot/stuff/something": &testFile{
-			[]byte("This is something"),
-			0644,
-			0755,
-			500,
-			500,
-		},
-	}
-	setUpFilesystemForTest(t, preppiFS, files)
-
-	for _, tt := range []struct {
-		name    string
-		mapping *Mapping
-		wantErr bool
-	}{
-		{
-			name:    "destination doesn't exist",
-			mapping: &Mapping{"/boot/stuff/something", "/this/doesnt/exist", 0640, 0750, 500, 500, false},
-			wantErr: false,
-		},
-		{
-			name:    "destination exists, can't clobber",
-			mapping: &Mapping{"/boot/stuff/something", "/this/exists", 0640, 0750, 500, 500, false},
-			wantErr: true,
-		},
-		{
-			name:    "destination exists, can clobber",
-			mapping: &Mapping{"/boot/stuff/something", "/this/exists", 0640, 0750, 500, 500, true},
-			wantErr: false,
-		},
-	} {
-		err := tt.mapping.Apply()
-		if err == nil && tt.wantErr {
-			t.Errorf("%s: wanted error, got none", tt.name)
-		} else if err != nil && !tt.wantErr {
-			t.Errorf("%s: wanted no error, got: %q", tt.name, err)
-		}
-	}
-}
-
-func TestCopyToDestination(t *testing.T) {
-	origPreppiFS := preppiFS
-	defer func() { preppiFS = origPreppiFS }()
-
-	files := map[string]*testFile{
-		"/boot/stuff/something": &testFile{
-			[]byte("This is something"),
-			0644,
-			0755,
-			500,
-			500,
-		},
-	}
-
-	for _, tt := range []struct {
-		name    string
-		mapping *Mapping
-	}{
-		{
-			name:    "same permissions, same mode",
-			mapping: &Mapping{"/boot/stuff/something", "/some/place", 0644, 0755, 500, 500, false},
-		},
-		{
-			name:    "same permissions, different mode",
-			mapping: &Mapping{"/boot/stuff/something", "/some/place", 0512, 0623, 500, 500, false},
-		},
-		{
-			name:    "different permissions, same mode",
-			mapping: &Mapping{"/boot/stuff/something", "/some/place", 0644, 0755, 0, 0, false},
-		},
-		{
-			name:    "different permissions, different mode",
-			mapping: &Mapping{"/boot/stuff/something", "/some/place", 0444, 0555, 0, 0, false},
-		},
-	} {
-		// Start with a cleanly-configured FS for each case.
-		preppiFS = NewMemMapFs()
-		setUpFilesystemForTest(t, preppiFS, files)
-
-		if err := tt.mapping.copyToDestination(); err != nil {
-			t.Errorf("%s: wanted no error, got: %v", tt.name, err)
-		}
-		s, err := preppiFS.Stat(tt.mapping.Destination)
+		got, err := tt.mapping.destinationExists()
 		if err != nil {
-			t.Fatalf("%s: stat failed: %v", tt.name, err)
+			t.Fatalf("wanted no error, got: %v", err)
 		}
-		if s.Mode() != tt.mapping.Mode {
-			t.Errorf("%s: wanted mode %v, got mode %v", tt.name, tt.mapping.Mode, s.Mode())
+		if got != tt.want {
+			t.Errorf("%v: wanted %v, got %v", tt.name, tt.want, got)
 		}
-		// TODO(cfunkhouser): Figure out how to check UID/GID here.
+	}
+}
+
+func TestShouldCopy(t *testing.T) {
+	origPreppiFS := preppiFS
+	defer func() { preppiFS = origPreppiFS }()
+	preppiFS = NewMemMapFs()
+
+	files := map[string]*testFile{
+		"/exists/should/copy": &testFile{
+			[]byte("This is not the source file."),
+			0644,
+			0755,
+			500,
+			500,
+		},
+		"/exists/skipped": &testFile{
+			[]byte("Here we are extending into shooting stars"),
+			0644,
+			0755,
+			500,
+			500,
+		},
+		"/exists/cant/clobber": &testFile{
+			[]byte("This is not the source file."),
+			0644,
+			0755,
+			500,
+			500,
+		},
+	}
+	setUpFilesystemForTest(t, preppiFS, files)
+
+	// Hash from a file identical to /exists/skipped in the test filesystem
+	srcCksm := []byte{
+		175, 27, 219, 187, 224, 133, 38, 183, 254, 243, 232, 251, 57, 249, 11, 97, 140, 82, 253, 208, 209, 21, 224, 225,
+		112, 105, 18, 224, 67, 79, 5, 154}
+
+	for _, tt := range []struct {
+		name    string
+		mapping *Mapping
+		want    bool
+		wantErr error
+	}{
+		{
+			name:    "exists, should copy",
+			mapping: &Mapping{"/whatever", "/exists/should/copy", 0640, 0750, 500, 500, true},
+			want:    true,
+		},
+		{
+			name:    "exists, skipped",
+			mapping: &Mapping{"/whatever", "/exists/skipped", 0640, 0750, 500, 500, true},
+		},
+		{
+			name:    "exists, can't clobber",
+			mapping: &Mapping{"/whatever", "/exists/cant/clobber", 0640, 0750, 500, 500, false},
+			wantErr: errCantClobber,
+		},
+		{
+			name:    "doesn't exist, should copy",
+			mapping: &Mapping{"/whatever", "/doesnt/exist", 0640, 0750, 500, 500, false},
+			want:    true,
+		},
+		// No such thing as "doesn't exist, shouldn't copy"
+	} {
+		got, gotErr := tt.mapping.shouldCopy(srcCksm)
+		if gotErr != tt.wantErr {
+			t.Fatalf("%v: wanted error: %v\ngot error: %v", tt.name, tt.wantErr, gotErr)
+		}
+		if got != tt.want {
+			t.Errorf("%v: wanted %v, got %v", tt.name, tt.want, got)
+		}
 	}
 }

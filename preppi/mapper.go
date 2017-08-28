@@ -154,34 +154,35 @@ func (m *Mapping) source() (afero.File, []byte, error) {
 }
 
 // Apply the mapping, copying Source to Destination and set the metadata.
-func (m *Mapping) Apply() error {
+func (m *Mapping) Apply() (bool, error) {
 	src, srcCksm, err := m.source()
 	if err != nil {
-		return err
+		return false, err
 	}
 	defer src.Close()
 
 	ok, err := m.shouldCopy(srcCksm)
 	if err != nil {
-		return err
+		return false, err
 	}
 	if !ok {
 		log.Printf("skipping %q", m.Destination)
-		return nil
+		return false, nil
 	}
 
 	log.Printf("beginning copy %q -> %q", m.Source, m.Destination)
 	dst, err := m.prepareNewDestination()
 	if err != nil {
-		return err
+		return false, err
 	}
 	if _, err := io.Copy(dst, src); err != nil {
-		return err
+		return false, err
 	}
 	if err := preppiFS.Chown(m.Destination, m.UID, m.GID); err != nil {
-		return err
+		return false, err
 	}
-	return nil
+	// No errors, and the destination has changed.
+	return true, nil
 }
 
 // Mapper represents a set of file mappings.
@@ -189,14 +190,21 @@ type Mapper struct {
 	Mappings []*Mapping `json:"map"`
 }
 
-// Apply the set of mappings to the preppiFS
-func (m *Mapper) Apply() error {
+// Apply the set of mappings to the preppiFS. Returns a count of files modified,
+// and the first error encountered. If an error is encoutered, modified count
+// reflects number of files modified beforehand.
+func (m *Mapper) Apply() (int, error) {
+	modified := 0
 	for _, mapping := range m.Mappings {
-		if err := mapping.Apply(); err != nil {
-			return err
+		ok, err := mapping.Apply()
+		if err != nil {
+			return modified, err
+		}
+		if ok {
+			modified++
 		}
 	}
-	return nil
+	return modified, nil
 }
 
 // MapperFromConfig reads a config and returns a Mapper

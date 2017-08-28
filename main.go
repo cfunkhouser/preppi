@@ -57,11 +57,10 @@ func main() {
 		log.Fatal(err)
 	}
 	if !*dryRun {
-		if err := mapper.Apply(); err != nil {
-			log.Fatal(err)
+		n, err := mapper.Apply()
+		if err != nil {
+			log.Printf("Error: %v", err)
 		}
-		log.Printf("preppi applied %v files in %v", len(mapper.Mappings), time.Since(start))
-	} else {
-		log.Printf("preppi would have applied %v files if not for --dry_run", len(mapper.Mappings))
+		log.Printf("preppi processed %v files, modified %v in %v", len(mapper.Mappings), n, time.Since(start))
 	}
 }

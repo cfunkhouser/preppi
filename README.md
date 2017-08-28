@@ -31,33 +31,53 @@ impossible with PrepPi.
 1.  Flash an OS image with PrepPi installed to the SD card
 1.  Mount the boot volume locally
 1.  Create a directory `preppi/` and file `preppi/preppi.conf`, and populate
-    `preppi.conf` with a JSON file
-
-    ```{
-        "map": [
-          {
-            "source": "/boot/preppi/yourfile",
-            "destination": "/etc/yourfile",
-            "mode": 330,
-            "dirmode": 482,
-            "uid": 502,
-            "gid": 12,
-            "clobber": true
-          }
-        ]
-      }
-    ```
-    Note that the `mode` and `dirmode` are standard unix file modes, expressed
-    as decimal values. This is because JSON parsers - and specifically, the Go
-    JSON implementation - don't handle octal very well.
+    `preppi.conf`
 1.  Boot the OS - PrepPi will place the files where you specify
+
+### Example `preppi.conf`
+
+To set the hostname of the system, the PrepPi configuration might be:
+
+```json
+{
+  "map": [
+    {
+      "source": "/boot/preppi/etc-hostname",
+      "destination": "/etc/hostname",
+      "mode": 420,
+      "dirmode": 493,
+      "uid": 0,
+      "gid": 0,
+      "clobber": true
+    },
+    {
+      "source": "/boot/preppi/etc-hosts",
+      "destination": "/etc/hosts",
+      "mode": 420,
+      "dirmode": 493,
+      "uid": 0,
+      "gid": 0,
+      "clobber": true
+    }
+  ]
+}
+```
+
+Note that the `mode` and `dirmode` are standard unix file modes, expressed as
+decimal values. This is because JSON parsers - and specifically, the Go JSON
+implementation - don't handle octal very well. In this case, `420 = 0644` and
+`493 = 0755`.
 
 ## Versions
 
 The versions and notable changes are listed below.
 
-### `v0.1` - 2017-08-26
+### `v0.1` - 2017-08-28
 -   Basic functionality
+    -   Applies files to FS, and then reboots the system to force changes to
+        take effect
+    -   UID/GID enforcement works, but is not unit tested or checked due to
+        FS abstraction shortcomings
 
 ## Planned Future Features
 -   Early boot configuration (ie, filesystem mounting)

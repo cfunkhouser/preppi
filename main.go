@@ -34,10 +34,10 @@ var (
 	version = "0.1.0"
 	buildID = "dev" // Overriden at build time by build scripts.
 
-	mapFile = flag.String("config", "/boot/preppi/preppi.conf", "Mappings file path")
-	verFlag = flag.Bool("version", false, "If true, print version and exit.")
-	dryRun  = flag.Bool("dry_run", false, "If true, parses the config but changes nothing.")
-	reboot  = flag.Bool("reboot", false, "Reboot when file changes have been written")
+	confFile = flag.String("config", "/boot/preppi/preppi.conf", "Mappings file path")
+	verFlag  = flag.Bool("version", false, "If true, print version and exit.")
+	dryRun   = flag.Bool("dry_run", false, "If true, parses the config but changes nothing.")
+	reboot   = flag.Bool("reboot", false, "Reboot when file changes have been written")
 )
 
 func init() {
@@ -45,23 +45,42 @@ func init() {
 		"Command to run to reboot the system. No arguments may be passed.")
 }
 
+func checkConfigExists(p string) (bool, error) {
+	_, err := os.Stat(p)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return false, nil
+		}
+		return false, err
+	}
+	return true, nil
+}
+
 func main() {
 	flag.Parse()
 
 	if *verFlag {
 		fmt.Printf("preppi v%v (%v)\n", version, buildID)
-		os.Exit(0)
+		return
 	}
 
 	log.Printf("preppi v%v (%v) starting", version, buildID)
-	start := time.Now()
-	if *mapFile == "" {
-		log.Fatal("No --config specified, nothing to do!")
+	if *confFile == "" {
+		log.Print("No --config specified, nothing to do!")
+		return
 	}
-	mapper, err := preppi.MapperFromConfig(*mapFile)
+	if ok, err := checkConfigExists(*confFile); !ok {
+		if err != nil {
+			log.Fatalf("Couldn't stat --config %q: %v", *confFile, err)
+		}
+		log.Printf("Specified --config %q doesn't exist, nothing to do!", *confFile)
+		return
+	}
+	mapper, err := preppi.MapperFromConfig(*confFile)
 	if err != nil {
-		log.Fatal(err)
+		log.Fatalf("Error processing --config %q: %v", *confFile, err)
 	}
+	start := time.Now()
 	if !*dryRun {
 		n, err := mapper.Apply()
 		if err != nil {

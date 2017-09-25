@@ -1,0 +1,58 @@
+{
+  "name": "Simple Raspbian Stretch",
+  "ingredients": [
+    {
+      "source": "etc-hosts",
+      "destination": "/etc/hosts",
+      "mode": 420,
+      "dirmode": 493,
+      "uid": 0,
+      "gid": 0,
+      "clobber": true,
+      "vars": [
+        "Hostname",
+        "LocalDomain"
+      ]
+    },
+    {
+      "source": "etc-hostname",
+      "destination": "/etc/hostname",
+      "mode": 420,
+      "dirmode": 493,
+      "uid": 0,
+      "gid": 0,
+      "clobber": true,
+      "vars": [
+        "Hostname"
+      ]
+    },
+    {
+      "source": "etc-dhcpcd.conf",
+      "destination": "/etc/dhcpcd.conf",
+      "mode": 436,
+      "dirmode": 493,
+      "uid": 0,
+      "gid": 0,
+      "clobber": true,
+      "vars": [
+        "Eth0CIDR",
+        "WLAN0CIDR",
+        "Routers",
+        "DNSServers"
+      ]
+    },
+    {
+      "source": "etc-wpa_supplicant-wpa_supplicant.conf",
+      "destination": "/etc/wpa_supplicant/wpa_supplicant.conf",
+      "mode": 384,
+      "dirmode": 493,
+      "uid": 0,
+      "gid": 0,
+      "clobber": true,
+      "vars": [
+        "SSID",
+        "WPAPSK"
+      ]
+    }
+  ]
+}

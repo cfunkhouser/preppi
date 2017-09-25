@@ -17,27 +17,50 @@
 // LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
 // OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
 // THE SOFTWARE.
-
 package preppi
 
 import (
-	"bytes"
-	"os"
+	"reflect"
 	"testing"
 )
 
-func TestFingerprint(t *testing.T) {
-	want := []byte{
-		231, 229, 72, 216, 163, 163, 6, 57, 6, 73, 182, 232, 187, 241, 75, 26, 119,
-		109, 205, 188, 57, 132, 164, 238, 48, 76, 50, 245, 194, 161, 167, 146}
-
-	rs := bytes.NewReader([]byte("Here we are extending into shooting stars"))
-	m := os.FileMode(0640)
-	got, err := Fingerprint(m, rs)
-	if err != nil {
-		t.Errorf("fingerprint test expected no error, but got: %v", err)
+func TestRecipeVars(t *testing.T) {
+	r := &Recipe{
+		Name: "Test Recipe",
+		Ingredients: []*Ingredient{
+			&Ingredient{Vars: []string{"Foo", "Bar", "Baz"}},
+			&Ingredient{Vars: []string{"Foo", "Bar", "Quux"}},
+		},
 	}
-	if bytes.Compare(want, got) != 0 {
-		t.Errorf("fingerprint test wanted %x, got %x", want, got)
+
+	want := []string{"Bar", "Baz", "Foo", "Quux"}
+	got := r.Vars()
+	if !reflect.DeepEqual(got, want) {
+		t.Errorf("wanted %+v, got %+v", want, got)
+	}
+}
+
+func TestIngredientCompileTemplate(t *testing.T) {
+	for _, tt := range []struct {
+		tmplString string
+		wantErr    bool
+	}{
+		{
+			tmplString: `{{.Something}}`,
+			wantErr:    false,
+		}, {
+			tmplString: `{{.Something`,
+			wantErr:    true,
+		},
+	} {
+		ingredient := &Ingredient{
+			Source: "/some/file/path",
+		}
+		_, err := ingredient.compileTemplate(tt.tmplString)
+		if err != nil && !tt.wantErr {
+			t.Errorf("wanted no error, got: %v", err)
+		} else if err == nil && tt.wantErr {
+			t.Error("wanted error, but got none")
+		}
 	}
 }

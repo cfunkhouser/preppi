@@ -3,19 +3,25 @@
 
 [[projects]]
   branch = "master"
+  name = "github.com/google/subcommands"
+  packages = ["."]
+  revision = "ce3d4cfc062faac7115d44e5befec8b5a08c3faa"
+
+[[projects]]
+  branch = "master"
   name = "github.com/spf13/afero"
   packages = [".","mem"]
-  revision = "36f8810e2e3d7eeac4ac05b57f65690fbfba62a2"
+  revision = "ee1bd8ee15a1306d1f9201acc41ef39cd9f99a1b"
 
 [[projects]]
   branch = "master"
   name = "golang.org/x/text"
   packages = ["internal/gen","internal/triegen","internal/ucd","transform","unicode/cldr","unicode/norm"]
-  revision = "ac87088df8ef557f1e32cd00ed0b6fbc3f7ddafb"
+  revision = "1cbadb444a806fd9430d14ad08967ed91da4fa0a"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  inputs-digest = "6df9e431984e9cd7ca2a47d71e95ebbcda09545d57542bc02be1ca6341474a05"
+  inputs-digest = "b1348104e01769322f903e3ae8a4e6fc50a3e1cbaed9643d3b9b35cd1c3fe7d6"
   solver-name = "gps-cdcl"
   solver-version = 1

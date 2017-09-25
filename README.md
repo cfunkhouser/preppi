@@ -72,6 +72,10 @@ implementation - don't handle octal very well. In this case, `420 = 0644` and
 
 The versions and notable changes are listed below.
 
+### `v0.1.1` - 2017-09-25
+-   Refactored for subcommands
+-   Now includes a `bake` mode, which generates configs from templates
+
 ### `v0.1` - 2017-08-28
 -   Basic functionality
     -   Applies files to FS, and then reboots the system to force changes to
@@ -82,9 +86,6 @@ The versions and notable changes are listed below.
 ## Planned Future Features
 -   Early boot configuration (ie, filesystem mounting)
 -   Package installation / Script execution
--   Configuration helper tool
-    -   Create `preppi.conf`
-    -   Static files from templates
 
 ## Contributors
 -   Christian Funkhouser ([cfunkhouser](http://github.com/cfunkhouser))

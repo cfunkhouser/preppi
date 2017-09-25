@@ -1,6 +1,6 @@
 SRCROOT = /opt/gopath/src/github.com/cfunkhouser/preppi
 
-VERSION = 0.1.0
+VERSION = 0.1.1
 BUILDID = $(shell git describe --always --long --dirty)
 
 LDFLAGS="-X github.com/cfunkhouser/preppi/preppi.Version=$(VERSION) -X github.com/cfunkhouser/preppi/preppi.BuildID=$(BUILDID)"

@@ -222,7 +222,7 @@ func MapperFromConfig(config string) (*Mapper, error) {
 
 // MapperToFile marshals m to path as JSON.
 func MapperToFile(path string, m *Mapper) error {
-	b, err := json.Marshal(m)
+	b, err := json.MarshalIndent(m, "", "\t")
 	if err != nil {
 		return err
 	}

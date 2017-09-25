@@ -34,7 +34,7 @@ func TestRecipeVars(t *testing.T) {
 	}
 
 	want := []string{"Bar", "Baz", "Foo", "Quux"}
-	got := r.Vars()
+	got := r.vars()
 	if !reflect.DeepEqual(got, want) {
 		t.Errorf("wanted %+v, got %+v", want, got)
 	}

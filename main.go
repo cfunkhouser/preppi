@@ -26,6 +26,8 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path"
+	"strings"
 	"time"
 
 	"github.com/cfunkhouser/preppi/preppi"
@@ -33,18 +35,10 @@ import (
 )
 
 var (
-	confFile = flag.String("config", "/boot/preppi/preppi.conf", "Mappings file path")
-	verFlag  = flag.Bool("version", false, "If true, print version and exit.")
-	dryRun   = flag.Bool("dry_run", false, "If true, parses the config but changes nothing.")
-	reboot   = flag.Bool("reboot", false, "Reboot when file changes have been written")
-
-	prepConfigDefault = "/boot/preppi/preppi.conf"
+	prepConfigDefault     = "/boot/preppi/preppi.conf"
+	bakeRecipeRootDefault = "/etc/preppi/recipes"
+	bakeRecipeNameDefault = "recipe.json"
 )
-
-func init() {
-	flag.StringVar(&preppi.RebootCommand, "reboot_command", preppi.RebootCommand,
-		"Command to run to reboot the system. No arguments may be passed.")
-}
 
 func checkConfigExists(p string) (bool, error) {
 	_, err := os.Stat(p)
@@ -87,7 +81,10 @@ func (*prepCmd) Usage() string {
 func (c *prepCmd) SetFlags(f *flag.FlagSet) {
 	f.BoolVar(&c.reboot, "reboot", false, "reboot the system after preparation.")
 	f.BoolVar(&c.dryRun, "dry_run", false, "parse the config and simulate, but make no changes.")
-	f.StringVar(&c.config, "config", prepConfigDefault, fmt.Sprintf("override the default config file path. default: %q", prepConfigDefault))
+	f.StringVar(&c.config, "config", prepConfigDefault, "override the default config file path.")
+
+	f.StringVar(&preppi.RebootCommand, "reboot_command", preppi.RebootCommand,
+		"Command to run to reboot the system. No arguments may be passed.")
 }
 
 func (c *prepCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{}) subcommands.ExitStatus {
@@ -114,13 +111,13 @@ func (c *prepCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{}) 
 	}
 
 	start := time.Now()
-	if !*dryRun {
+	if !c.dryRun {
 		n, err := mapper.Apply()
 		if err != nil {
 			log.Printf("Error: %v", err)
 		}
 		log.Printf("preppi processed %v files, modified %v in %v", len(mapper.Mappings), n, time.Since(start))
-		if n > 0 && err == nil && *reboot {
+		if n > 0 && err == nil && c.reboot {
 			log.Printf("Files changed, rebooting with: %q", preppi.RebootCommand)
 			if err := preppi.RebootSystem(); err != nil {
 				log.Printf("preppi tried to reboot the system but failed: %v", err)
@@ -144,12 +141,52 @@ func (*bakeCmd) Usage() string {
 
 func (c *bakeCmd) SetFlags(f *flag.FlagSet) {
 	f.StringVar(&c.recipe, "recipe", "", "name of the recipe to bake. required.")
-	f.StringVar(&c.recipeRoot, "root", "", "override default recipe root location.")
+	f.StringVar(&c.recipeRoot, "root", bakeRecipeRootDefault, "override default recipe root location.")
 	f.StringVar(&c.destination, "out", "", "path under which generated files are written")
 }
 
+func unpackKV(kvs []string) (map[string]string, error) {
+	v := make(map[string]string)
+	for _, kv := range kvs {
+		s := strings.Split(kv, "=")
+		if len(s) != 2 {
+			return nil, fmt.Errorf("Invalid Value Specification: %q", kv)
+		}
+		v[s[0]] = s[1]
+	}
+	return v, nil
+}
+
 func (c *bakeCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{}) subcommands.ExitStatus {
-	log.Println("Not yet implemented")
+	if c.recipe == "" {
+		log.Print("No -recipe provided, nothing to do!")
+		return subcommands.ExitFailure
+	}
+	if c.destination == "" {
+		log.Print("No -out provided, refusing to write to current directory without explicit instruction")
+		return subcommands.ExitFailure
+	}
+	vars, err := unpackKV(f.Args())
+	if err != nil {
+		log.Printf("error processing variables: %v", err)
+		return subcommands.ExitFailure
+	}
+	rd := &preppi.RecipeData{}
+	rd.Vars = vars
+
+	recipePath := path.Join(c.recipeRoot, c.recipe, bakeRecipeNameDefault)
+	recipe, err := preppi.RecipeFromFile(recipePath)
+	if err != nil {
+		log.Printf("error reading recipe %q: %v", recipePath, err)
+		return subcommands.ExitFailure
+	}
+
+	start := time.Now()
+	log.Printf("baking recipe %q", c.recipe)
+	if err := recipe.Bake(c.destination, rd); err != nil {
+		log.Printf("error baking recipe: %v", err)
+	}
+	log.Printf("preppi baked recipe %q in %v", c.recipe, time.Since(start))
 	return subcommands.ExitSuccess
 }
 

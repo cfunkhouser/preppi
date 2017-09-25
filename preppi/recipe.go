@@ -123,6 +123,9 @@ type Recipe struct {
 
 func (r *Recipe) Bake(dest string, d *RecipeData) error {
 	m := make([]*Mapping, 0)
+	if err := r.checkVars(d); err != nil {
+		return err
+	}
 	for _, i := range r.Ingredients {
 		if err := i.Prepare(r.root, dest, d); err != nil {
 			// Stop at the first error
@@ -136,8 +139,21 @@ func (r *Recipe) Bake(dest string, d *RecipeData) error {
 	return nil
 }
 
-// Vars accumulates the variables expected for each ingredient.
-func (r *Recipe) Vars() []string {
+func (r *Recipe) checkVars(d *RecipeData) error {
+	missing := make([]string, 0)
+	for _, v := range r.vars() {
+		if _, ok := d.Vars[v]; !ok {
+			missing = append(missing, v)
+		}
+	}
+	if len(missing) > 0 {
+		return fmt.Errorf("recipe %q expected the following missing variables: %+v", r.Name, missing)
+	}
+	return nil
+}
+
+// vars accumulates the variables expected for each ingredient.
+func (r *Recipe) vars() []string {
 	varMap := make(map[string]bool)
 	for _, i := range r.Ingredients {
 		for _, v := range i.Vars {
@@ -154,14 +170,16 @@ func (r *Recipe) Vars() []string {
 }
 
 // RecipeFromFile reads a config and returns a Mapper
-func RecipeFromFile(path string) (*Recipe, error) {
-	data, err := afero.ReadFile(preppiFS, path)
+func RecipeFromFile(name string) (*Recipe, error) {
+	data, err := afero.ReadFile(preppiFS, name)
 	if err != nil {
-		return nil, fmt.Errorf("failed reading recipe %q: %v", path, err)
+		return nil, fmt.Errorf("failed reading recipe %q: %v", name, err)
 	}
-	r := &Recipe{}
+	r := &Recipe{
+		root: path.Dir(name),
+	}
 	if err := json.Unmarshal(data, r); err != nil {
-		return nil, fmt.Errorf("failed reading recipe %q: %v", path, err)
+		return nil, fmt.Errorf("failed reading recipe %q: %v", name, err)
 	}
 	return r, nil
 }

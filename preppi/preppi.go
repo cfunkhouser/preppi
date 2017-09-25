@@ -20,24 +20,17 @@
 
 package preppi
 
-import (
-	"bytes"
-	"os"
-	"testing"
+import "fmt"
+
+var (
+	// Version of PrepPi
+	Version = "0.1.0"
+
+	// BuildID of PrepPi. Usually overridden at build time.
+	BuildID = "dev"
 )
 
-func TestFingerprint(t *testing.T) {
-	want := []byte{
-		231, 229, 72, 216, 163, 163, 6, 57, 6, 73, 182, 232, 187, 241, 75, 26, 119,
-		109, 205, 188, 57, 132, 164, 238, 48, 76, 50, 245, 194, 161, 167, 146}
-
-	rs := bytes.NewReader([]byte("Here we are extending into shooting stars"))
-	m := os.FileMode(0640)
-	got, err := Fingerprint(m, rs)
-	if err != nil {
-		t.Errorf("fingerprint test expected no error, but got: %v", err)
-	}
-	if bytes.Compare(want, got) != 0 {
-		t.Errorf("fingerprint test wanted %x, got %x", want, got)
-	}
+// VersionString returnds a human-readable PrepPi version ID.
+func VersionString() string {
+	return fmt.Sprintf("PrepPi v%v (%v)", Version, BuildID)
 }

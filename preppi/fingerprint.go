@@ -29,7 +29,7 @@ import (
 
 // fingerprint checksums the file and its relavent metadata for PrepPi.
 // TODO(cfunkhouser): UID/GID
-func fingerprint(mode os.FileMode, f io.ReadSeeker) ([]byte, error) {
+func Fingerprint(mode os.FileMode, f io.ReadSeeker) ([]byte, error) {
 	h := sha256.New()
 	b := make([]byte, 4)
 

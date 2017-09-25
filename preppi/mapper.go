@@ -90,7 +90,7 @@ func (m *Mapping) destinationFingerprint() ([]byte, error) {
 		return nil, err
 	}
 
-	dstCksm, err := fingerprint(s.Mode(), dst)
+	dstCksm, err := Fingerprint(s.Mode(), dst)
 	if err != nil {
 		return nil, err
 	}
@@ -146,7 +146,7 @@ func (m *Mapping) source() (afero.File, []byte, error) {
 	if err != nil {
 		return nil, nil, fmt.Errorf("couldn't open source: %v", err)
 	}
-	cksm, err := fingerprint(m.Mode, src)
+	cksm, err := Fingerprint(m.Mode, src)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -218,4 +218,20 @@ func MapperFromConfig(config string) (*Mapper, error) {
 		return nil, fmt.Errorf("failed reading config %q: %v", config, err)
 	}
 	return m, nil
+}
+
+// MapperToFile marshals m to path as JSON.
+func MapperToFile(path string, m *Mapper) error {
+	b, err := json.Marshal(m)
+	if err != nil {
+		return err
+	}
+	f, err := preppiFS.Create(path)
+	if err != nil {
+		return err
+	}
+	if _, err := f.Write(b); err != nil {
+		return err
+	}
+	return nil
 }

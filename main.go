@@ -21,6 +21,7 @@
 package main
 
 import (
+	"context"
 	"flag"
 	"fmt"
 	"log"
@@ -28,16 +29,16 @@ import (
 	"time"
 
 	"github.com/cfunkhouser/preppi/preppi"
+	"github.com/google/subcommands"
 )
 
 var (
-	version = "0.1.0"
-	buildID = "dev" // Overriden at build time by build scripts.
-
 	confFile = flag.String("config", "/boot/preppi/preppi.conf", "Mappings file path")
 	verFlag  = flag.Bool("version", false, "If true, print version and exit.")
 	dryRun   = flag.Bool("dry_run", false, "If true, parses the config but changes nothing.")
 	reboot   = flag.Bool("reboot", false, "Reboot when file changes have been written")
+
+	prepConfigDefault = "/boot/preppi/preppi.conf"
 )
 
 func init() {
@@ -56,30 +57,62 @@ func checkConfigExists(p string) (bool, error) {
 	return true, nil
 }
 
-func main() {
-	flag.Parse()
+type versionCmd struct{}
 
-	if *verFlag {
-		fmt.Printf("preppi v%v (%v)\n", version, buildID)
-		return
+func (*versionCmd) Name() string     { return "version" }
+func (*versionCmd) Synopsis() string { return "print the version" }
+func (*versionCmd) Usage() string {
+	return "Usage:\tpreppi version\n"
+}
+
+func (*versionCmd) SetFlags(_ *flag.FlagSet) {}
+
+func (*versionCmd) Execute(_ context.Context, _ *flag.FlagSet, _ ...interface{}) subcommands.ExitStatus {
+	fmt.Println(preppi.VersionString())
+	return subcommands.ExitSuccess
+}
+
+type prepCmd struct {
+	reboot bool
+	dryRun bool
+	config string
+}
+
+func (*prepCmd) Name() string     { return "prepare" }
+func (*prepCmd) Synopsis() string { return "prepare the system" }
+func (*prepCmd) Usage() string {
+	return "Usage:\tpreppi prepare [-config <path>] [-dry_run] [-reboot]\n"
+}
+
+func (c *prepCmd) SetFlags(f *flag.FlagSet) {
+	f.BoolVar(&c.reboot, "reboot", false, "reboot the system after preparation.")
+	f.BoolVar(&c.dryRun, "dry_run", false, "parse the config and simulate, but make no changes.")
+	f.StringVar(&c.config, "config", prepConfigDefault, fmt.Sprintf("override the default config file path. default: %q", prepConfigDefault))
+}
+
+func (c *prepCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{}) subcommands.ExitStatus {
+	log.Printf("%v starting", preppi.VersionString())
+
+	if c.config == "" {
+		log.Print("No -config specified, nothing to do!")
+		return subcommands.ExitFailure
 	}
 
-	log.Printf("preppi v%v (%v) starting", version, buildID)
-	if *confFile == "" {
-		log.Print("No --config specified, nothing to do!")
-		return
-	}
-	if ok, err := checkConfigExists(*confFile); !ok {
+	if ok, err := checkConfigExists(c.config); !ok {
 		if err != nil {
-			log.Fatalf("Couldn't stat --config %q: %v", *confFile, err)
+			log.Printf("couldn't stat -config %q: %v", c.config, err)
+			return subcommands.ExitFailure
 		}
-		log.Printf("Specified --config %q doesn't exist, nothing to do!", *confFile)
-		return
+		log.Printf("specified -config %q doesn't exist, nothing to do!", c.config)
+		return subcommands.ExitSuccess
 	}
-	mapper, err := preppi.MapperFromConfig(*confFile)
+
+	mapper, err := preppi.MapperFromConfig(c.config)
 	if err != nil {
-		log.Fatalf("Error processing --config %q: %v", *confFile, err)
+		log.Printf("error processing -config %q: %v", c.config, err)
+		return subcommands.ExitFailure
 	}
+
 	start := time.Now()
 	if !*dryRun {
 		n, err := mapper.Apply()
@@ -94,4 +127,40 @@ func main() {
 			}
 		}
 	}
+	return subcommands.ExitSuccess
+}
+
+type bakeCmd struct {
+	recipe      string
+	recipeRoot  string
+	destination string
+}
+
+func (*bakeCmd) Name() string     { return "bake" }
+func (*bakeCmd) Synopsis() string { return "bake a recipe" }
+func (*bakeCmd) Usage() string {
+	return "Usage:\tpreppi bake [-root <path>] -recipe <name> -out <path> [var1=val1 [var2=val2] ...]\n"
+}
+
+func (c *bakeCmd) SetFlags(f *flag.FlagSet) {
+	f.StringVar(&c.recipe, "recipe", "", "name of the recipe to bake. required.")
+	f.StringVar(&c.recipeRoot, "root", "", "override default recipe root location.")
+	f.StringVar(&c.destination, "out", "", "path under which generated files are written")
+}
+
+func (c *bakeCmd) Execute(_ context.Context, f *flag.FlagSet, _ ...interface{}) subcommands.ExitStatus {
+	log.Println("Not yet implemented")
+	return subcommands.ExitSuccess
+}
+
+func main() {
+	subcommands.Register(subcommands.HelpCommand(), "")
+	subcommands.Register(subcommands.CommandsCommand(), "")
+	subcommands.Register(&versionCmd{}, "")
+	subcommands.Register(&prepCmd{}, "")
+	subcommands.Register(&bakeCmd{}, "")
+
+	flag.Parse()
+	ctx := context.Background()
+	os.Exit(int(subcommands.Execute(ctx)))
 }

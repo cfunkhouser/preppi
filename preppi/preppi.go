@@ -23,8 +23,8 @@ package preppi
 import "fmt"
 
 var (
-	// Version of PrepPi
-	Version = "0.1.0"
+	// Version of PrepPi. Usually overridden at build time.
+	Version = "0.1.dev"
 
 	// BuildID of PrepPi. Usually overridden at build time.
 	BuildID = "dev"
